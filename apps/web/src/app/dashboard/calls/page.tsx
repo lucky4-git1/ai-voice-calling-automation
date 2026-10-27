@@ -54,8 +54,41 @@ export default function CallHistoryPage() {
       const detail = await api.get<any>(`/calls/${callId}`);
       setSelectedCall(detail);
       setIsPlayingAudio(false);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     } catch (e: any) {
       alert(e.message || 'Failed to load call detail');
+    }
+  }
+
+  function togglePlayCallAudio() {
+    if (isPlayingAudio) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsPlayingAudio(false);
+    } else {
+      setIsPlayingAudio(true);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && selectedCall?.segments?.length > 0) {
+        window.speechSynthesis.cancel();
+        let index = 0;
+        const playNext = () => {
+          if (index < selectedCall.segments.length) {
+            const seg = selectedCall.segments[index];
+            const utterance = new SpeechSynthesisUtterance(seg.content);
+            utterance.rate = 1.0;
+            utterance.onend = () => {
+              index++;
+              playNext();
+            };
+            window.speechSynthesis.speak(utterance);
+          } else {
+            setIsPlayingAudio(false);
+          }
+        };
+        playNext();
+      }
     }
   }
 
@@ -238,7 +271,7 @@ export default function CallHistoryPage() {
               <div className="p-3 bg-canvas rounded-lg border border-border flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={() => setIsPlayingAudio(!isPlayingAudio)}
+                    onClick={togglePlayCallAudio}
                     className="w-8 h-8 rounded-full bg-forest text-white flex items-center justify-center shadow-sm"
                   >
                     {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}

@@ -32,6 +32,28 @@ export default function AgentStudioPage() {
   const [chatInput, setChatInput] = useState('');
   const [turnLoading, setTurnLoading] = useState(false);
   const [lastTurnDetails, setLastTurnDetails] = useState<any>(null);
+  const [audioPlaybackEnabled, setAudioPlaybackEnabled] = useState(true);
+
+  function speakText(text: string) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && audioPlaybackEnabled) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const naturalVoice = voices.find(
+        (v) =>
+          v.lang.startsWith('en') &&
+          (v.name.includes('Natural') ||
+            v.name.includes('Google') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('Zira') ||
+            v.name.includes('Female')),
+      );
+      if (naturalVoice) utterance.voice = naturalVoice;
+      window.speechSynthesis.speak(utterance);
+    }
+  }
 
   // Edit Form State
   const [name, setName] = useState('');
@@ -147,6 +169,7 @@ export default function AgentStudioPage() {
 
       setChatHistory((prev) => [...prev, { role: 'assistant', content: res.reply }]);
       setLastTurnDetails(res);
+      speakText(res.reply);
     } catch (e: any) {
       setChatHistory((prev) => [
         ...prev,
@@ -400,17 +423,31 @@ export default function AgentStudioPage() {
               <Bot className="w-4 h-4 text-forest" />
               <span className="text-xs font-semibold text-ink">Conversational Playground</span>
             </div>
-            <button
-              onClick={() => {
-                setChatHistory([
-                  { role: 'assistant', content: greetingMessage || 'Hello, how may I help you?' },
-                ]);
-                setLastTurnDetails(null);
-              }}
-              className="text-[10px] text-ink-muted hover:text-ink font-medium"
-            >
-              Reset Session
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setAudioPlaybackEnabled(!audioPlaybackEnabled)}
+                className={`p-1 rounded text-xs flex items-center space-x-1 ${
+                  audioPlaybackEnabled ? 'text-forest font-semibold' : 'text-ink-muted'
+                }`}
+                title="Toggle voice speech audio"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span className="text-[10px]">{audioPlaybackEnabled ? 'Voice ON' : 'Muted'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setChatHistory([
+                    { role: 'assistant', content: greetingMessage || 'Hello, how may I help you?' },
+                  ]);
+                  setLastTurnDetails(null);
+                  speakText(greetingMessage || 'Hello, how may I help you?');
+                }}
+                className="text-[10px] text-ink-muted hover:text-ink font-medium"
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           {/* Chat Stream */}
@@ -421,13 +458,23 @@ export default function AgentStudioPage() {
                 className={`flex ${msg.role === 'assistant' ? 'justify-start' : 'justify-end'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded px-3.5 py-2 text-xs leading-relaxed ${
+                  className={`max-w-[85%] rounded px-3.5 py-2 text-xs leading-relaxed relative group ${
                     msg.role === 'assistant'
                       ? 'bg-canvas border border-border text-ink'
                       : 'bg-forest text-white'
                   }`}
                 >
                   {msg.content}
+                  {msg.role === 'assistant' && (
+                    <button
+                      type="button"
+                      onClick={() => speakText(msg.content)}
+                      className="ml-2 inline-flex items-center text-forest hover:opacity-80 align-middle"
+                      title="Listen to voice"
+                    >
+                      <Volume2 className="w-3 h-3 inline" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
