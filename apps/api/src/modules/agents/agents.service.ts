@@ -89,12 +89,12 @@ export class AgentsService {
           versionNumber: 1,
           systemPrompt: dto.systemPrompt,
           greetingMessage: dto.greetingMessage,
-          fallbackMessage: dto.fallbackMessage,
-          endOfCallMessage: dto.endOfCallMessage,
-          voiceConfig: JSON.stringify(dto.voiceConfig),
-          tools: JSON.stringify(dto.tools.map((t) => t.name)),
-          escalationRules: JSON.stringify(dto.escalationRules),
-          businessHours: JSON.stringify(dto.businessHours),
+          fallbackMessage: dto.fallbackMessage || 'I apologize, could you please repeat that?',
+          endOfCallMessage: dto.endOfCallMessage || 'Thank you for calling. Goodbye!',
+          voiceConfig: JSON.stringify(dto.voiceConfig || {}),
+          tools: JSON.stringify((dto.tools || []).map((t: any) => (typeof t === 'string' ? t : t.name))),
+          escalationRules: JSON.stringify(dto.escalationRules || { allowHumanTransfer: true, transferPhoneNumber: '+15559990000' }),
+          businessHours: JSON.stringify(dto.businessHours || { enabled: false, timezone: 'UTC' }),
           publishedByUserId: userId,
         },
       });
@@ -108,10 +108,10 @@ export class AgentsService {
         ...agent,
         currentVersion: {
           ...version,
-          voiceConfig: dto.voiceConfig,
-          tools: dto.tools,
-          escalationRules: dto.escalationRules,
-          businessHours: dto.businessHours,
+          voiceConfig: dto.voiceConfig || {},
+          tools: dto.tools || [],
+          escalationRules: dto.escalationRules || { allowHumanTransfer: true },
+          businessHours: dto.businessHours || { enabled: false },
         },
       };
     });

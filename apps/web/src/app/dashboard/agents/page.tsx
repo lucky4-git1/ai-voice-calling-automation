@@ -170,8 +170,20 @@ export default function AgentStudioPage() {
           ttsVoiceId: '21m00Tcm4TlvDq8ikWAM',
           llmModel: 'gpt-4o-mini',
           temperature: 0.6,
+          ttsSpeed: 1.0,
+          sttProvider: 'DEEPGRAM',
+          ttsProvider: 'ELEVENLABS',
+          llmProvider: 'OPENAI',
         },
         tools: [],
+        escalationRules: {
+          allowHumanTransfer: true,
+          transferPhoneNumber: '+15559990000',
+        },
+        businessHours: {
+          enabled: false,
+          timezone: 'UTC',
+        },
       });
       setIsCreating(false);
       await loadAgents();
