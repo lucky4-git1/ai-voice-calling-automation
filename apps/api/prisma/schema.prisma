@@ -1,0 +1,489 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  ANALYST
+  MEMBER
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  QUEUED
+  INITIATING
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  BUSY
+  NO_ANSWER
+  FAILED
+  CANCELED
+  TRANSFERRED
+}
+
+enum AgentStatus {
+  DRAFT
+  VALIDATING
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  QUEUED
+  DIALING
+  ANSWERED
+  COMPLETED
+  BUSY
+  NO_ANSWER
+  FAILED
+  CANCELLED
+  SUPPRESSED
+}
+
+model User {
+  id            String                   @id @default(uuid())
+  email         String                   @unique
+  passwordHash  String
+  name          String
+  avatarUrl     String?
+  emailVerified Boolean                  @default(false)
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  memberships   OrganizationMembership[]
+  auditLogs     AuditLog[]
+}
+
+model Organization {
+  id                    String                   @id @default(uuid())
+  name                  String
+  slug                  String                   @unique
+  plan                  String                   @default("STARTER")
+  timezone              String                   @default("UTC")
+  monthlySpendLimitCents Int                     @default(10000)
+  currentSpendCents     Int                      @default(0)
+  stripeCustomerId      String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  memberships           OrganizationMembership[]
+  agents                Agent[]
+  phoneNumbers          PhoneNumber[]
+  contacts              Contact[]
+  suppressions          SuppressionEntry[]
+  campaigns             Campaign[]
+  calls                 Call[]
+  toolDefinitions       ToolDefinition[]
+  workflows             Workflow[]
+  knowledgeBases        KnowledgeBase[]
+  integrations          IntegrationConnection[]
+  subscriptions         Subscription[]
+  usageEvents           UsageEvent[]
+  auditLogs             AuditLog[]
+  apiKeys               ApiKey[]
+  invitations           Invitation[]
+}
+
+model OrganizationMembership {
+  id             String       @id @default(uuid())
+  userId         String
+  organizationId String
+  role           String       @default("MEMBER")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  organizationId String
+  email          String
+  role           String       @default("MEMBER")
+  token          String       @unique
+  status         String       @default("PENDING") // PENDING, ACCEPTED, EXPIRED
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  keyPrefix      String
+  keyHash        String
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Agent {
+  id              String         @id @default(uuid())
+  organizationId  String
+  name            String
+  description     String?
+  businessPurpose String
+  status          String         @default("DRAFT")
+  currentVersionId String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions        AgentVersion[]
+  calls           Call[]
+  phoneNumbers    PhoneNumber[]
+  campaigns       Campaign[]
+}
+
+model AgentVersion {
+  id                 String    @id @default(uuid())
+  agentId            String
+  versionNumber      Int
+  systemPrompt       String
+  greetingMessage    String
+  fallbackMessage    String
+  endOfCallMessage   String
+  voiceConfig        String    // JSON encoded VoiceConfig
+  tools              String    // JSON encoded ToolDefinition[]
+  escalationRules    String    // JSON encoded escalation
+  businessHours      String    // JSON encoded business hours
+  publishedAt        DateTime  @default(now())
+  publishedByUserId  String?
+  agent              Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  calls              Call[]
+}
+
+model PhoneNumber {
+  id             String       @id @default(uuid())
+  organizationId String
+  number         String       @unique
+  friendlyName   String?
+  provider       String       @default("MOCK_DEV")
+  status         String       @default("ACTIVE")
+  activeAgentId  String?
+  webhookUrl     String?
+  capabilities   String       @default("{}") // JSON voice, sms
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent          Agent?       @relation(fields: [activeAgentId], references: [id], onDelete: SetNull)
+}
+
+model Contact {
+  id                 String              @id @default(uuid())
+  organizationId     String
+  phoneNumber        String
+  name               String?
+  email              String?
+  company            String?
+  timezone           String              @default("UTC")
+  consentStatus      String              @default("EXPRESS")
+  consentSource      String?
+  consentTimestamp   DateTime?           @default(now())
+  isDncSuppressed    Boolean             @default(false)
+  customFields       String              @default("{}") // JSON
+  tags               String              @default("[]") // JSON string array
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calls              Call[]
+  campaignRecipients CampaignRecipient[]
+
+  @@unique([organizationId, phoneNumber])
+}
+
+model SuppressionEntry {
+  id             String       @id @default(uuid())
+  organizationId String
+  phoneNumber    String
+  reason         String       @default("USER_OPT_OUT")
+  source         String       @default("IN_CALL_VERBAL")
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, phoneNumber])
+}
+
+model Campaign {
+  id                  String              @id @default(uuid())
+  organizationId      String
+  name                String
+  description         String?
+  agentId             String
+  callerIdNumber      String
+  status              String              @default("DRAFT")
+  concurrencyLimit    Int                 @default(5)
+  maxRetries          Int                 @default(1)
+  windowStart         String              @default("09:00")
+  windowEnd           String              @default("18:00")
+  timezoneEnforcement String              @default("RECIPIENT_LOCAL")
+  budgetLimitCents    Int?
+  totalRecipients     Int                 @default(0)
+  successfulCalls     Int                 @default(0)
+  failedCalls         Int                 @default(0)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent               Agent               @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  recipients          CampaignRecipient[]
+  calls               Call[]
+}
+
+model CampaignRecipient {
+  id             String    @id @default(uuid())
+  campaignId     String
+  contactId      String
+  phoneNumber    String
+  status         String    @default("PENDING")
+  retryCount     Int       @default(0)
+  nextAttemptAt  DateTime?
+  lastCallId     String?
+  resultOutcome  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  campaign       Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact        Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+model Call {
+  id               String              @id @default(uuid())
+  organizationId   String
+  agentId          String?
+  agentVersionId   String?
+  contactId        String?
+  campaignId       String?
+  direction        String              @default("OUTBOUND")
+  status           String              @default("INITIATING")
+  fromNumber       String
+  toNumber         String
+  durationSeconds  Int                 @default(0)
+  startedAt        DateTime            @default(now())
+  endedAt          DateTime?
+  recordingUrl     String?
+  sentiment        String              @default("NEUTRAL") // POSITIVE, NEUTRAL, NEGATIVE
+  costMinorUnits   Int                 @default(0)
+  providerCallSid  String?
+  providerName     String              @default("MOCK_DEV")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent            Agent?              @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentVersion     AgentVersion?       @relation(fields: [agentVersionId], references: [id], onDelete: SetNull)
+  contact          Contact?            @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign         Campaign?           @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  segments         TranscriptSegment[]
+  summary          CallSummary?
+  toolExecutions   ToolExecution[]
+  usageEvents      UsageEvent[]
+  workflowExec     WorkflowExecution?
+}
+
+model TranscriptSegment {
+  id                String   @id @default(uuid())
+  callId            String
+  role              String   // assistant, user, system
+  content           String
+  timestampOffsetMs Int      @default(0)
+  confidence        Float    @default(0.95)
+  createdAt         DateTime @default(now())
+  call              Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+}
+
+model CallSummary {
+  id               String   @id @default(uuid())
+  callId           String   @unique
+  overview         String
+  customerIntent   String
+  keyTopics        String   @default("[]") // JSON string array
+  actionItems      String   @default("[]") // JSON string array
+  followUpRequired Boolean  @default(false)
+  sentimentScore   Float    @default(0.0) // -1.0 to 1.0
+  extractedFields  String   @default("{}") // JSON key-value
+  createdAt        DateTime @default(now())
+  call             Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+}
+
+model ToolDefinition {
+  id                   String       @id @default(uuid())
+  organizationId       String
+  name                 String
+  description          String
+  parameters           String       @default("[]") // JSON ToolParameter[]
+  endpointUrl          String?
+  requiresConfirmation Boolean      @default(false)
+  enabled              Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+}
+
+model ToolExecution {
+  id            String   @id @default(uuid())
+  callId        String
+  toolName      String
+  inputPayload  String   @default("{}") // JSON
+  outputPayload String   @default("{}") // JSON
+  isSuccess     Boolean  @default(true)
+  durationMs    Int      @default(0)
+  createdAt     DateTime @default(now())
+  call          Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+}
+
+model Workflow {
+  id               String              @id @default(uuid())
+  organizationId   String
+  name             String
+  description      String?
+  status           String              @default("DRAFT")
+  currentVersionId String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions         WorkflowVersion[]
+  executions       WorkflowExecution[]
+}
+
+model WorkflowVersion {
+  id            String   @id @default(uuid())
+  workflowId    String
+  versionNumber Int
+  definition    String   // JSON WorkflowDefinition
+  publishedAt   DateTime @default(now())
+  workflow      Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowExecution {
+  id            String   @id @default(uuid())
+  workflowId    String
+  callId        String   @unique
+  status        String   @default("RUNNING") // RUNNING, COMPLETED, FAILED
+  currentNodeId String?
+  traceLog      String   @default("[]") // JSON array of trace events
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workflow      Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  call          Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeBase {
+  id             String              @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  embeddingModel String              @default("text-embedding-3-small")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documents      KnowledgeDocument[]
+}
+
+model KnowledgeDocument {
+  id              String           @id @default(uuid())
+  knowledgeBaseId String
+  title           String
+  sourceType      String           @default("TEXT")
+  originalContent String
+  chunkCount      Int              @default(0)
+  status          String           @default("PROCESSED")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  knowledgeBase   KnowledgeBase    @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks          KnowledgeChunk[]
+}
+
+model KnowledgeChunk {
+  id         String            @id @default(uuid())
+  documentId String
+  chunkIndex Int
+  content    String
+  metadata   String            @default("{}") // JSON
+  embedding  String            @default("[]") // JSON float array for vector similarity
+  createdAt  DateTime          @default(now())
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model IntegrationConnection {
+  id                   String       @id @default(uuid())
+  organizationId       String
+  provider             String       // TWILIO, TELNYX, ELEVENLABS, DEEPGRAM, OPENAI, HUBSPOT, STRIPE
+  status               String       @default("NOT_CONFIGURED") // NOT_CONFIGURED, CONNECTED, FAILED, DISCONNECTED
+  credentialsEncrypted String       @default("{}") // AES encrypted credentials or JSON token
+  config               String       @default("{}") // JSON settings
+  lastSyncedAt         DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+}
+
+model Subscription {
+  id                   String       @id @default(uuid())
+  organizationId       String
+  tier                 String       @default("STARTER")
+  status               String       @default("ACTIVE")
+  currentPeriodStart   DateTime     @default(now())
+  currentPeriodEnd     DateTime
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model UsageEvent {
+  id             String       @id @default(uuid())
+  organizationId String
+  callId         String?
+  eventType      String       // TELEPHONY_SECONDS, STT_MINUTES, TTS_CHARACTERS, LLM_TOKENS
+  quantity       Float
+  unit           String       // seconds, minutes, characters, tokens
+  costMinorUnits Int          @default(0) // In integer cents / hundredths of currency
+  recordedAt     DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  call           Call?        @relation(fields: [callId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  resourceType   String
+  resourceId     String?
+  details        String        @default("{}") // JSON
+  ipAddress      String?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+}

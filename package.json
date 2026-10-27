@@ -1,0 +1,34 @@
+{
+  "name": "ai-calling-voice-automation-saas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise-grade multi-tenant AI calling and voice automation SaaS platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @callagent/api dev & pnpm --filter @callagent/web dev",
+    "dev:api": "pnpm --filter @callagent/api dev",
+    "dev:web": "pnpm --filter @callagent/web dev",
+    "build": "pnpm --filter @callagent/shared build && pnpm --filter @callagent/api build && pnpm --filter @callagent/web build",
+    "test": "pnpm --filter @callagent/shared test && pnpm --filter @callagent/api test",
+    "test:e2e": "pnpm --filter @callagent/web test:e2e",
+    "lint": "pnpm --filter @callagent/api lint && pnpm --filter @callagent/web lint",
+    "prisma:generate": "pnpm --filter @callagent/api prisma:generate",
+    "prisma:migrate": "pnpm --filter @callagent/api prisma:migrate",
+    "prisma:seed": "pnpm --filter @callagent/api prisma:seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "bcrypt",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}
