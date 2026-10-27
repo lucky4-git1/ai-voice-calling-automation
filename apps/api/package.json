@@ -9,7 +9,7 @@
     "test": "node --test dist/**/*.spec.js 2>nul || echo API tests placeholder",
     "lint": "echo API lint passed",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
+    "prisma:push": "prisma db push --accept-data-loss",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts"
   },

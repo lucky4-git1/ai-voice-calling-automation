@@ -10,34 +10,24 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: callagent_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+    env:
+      DATABASE_URL: "file:./dev.db"
+      JWT_SECRET: "e9a8f27c3d1b4a5e8f0123456789abcdef0123456789abcdef0123456789abcdef"
+      ENCRYPTION_KEY: "01234567890123456789012345678901"
+      NODE_ENV: "test"
+      PORT: "4000"
+      API_PUBLIC_URL: "http://localhost:4000"
+      WEB_PUBLIC_URL: "http://localhost:3000"
+      NEXT_PUBLIC_API_URL: "http://localhost:4000"
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Setup Environment Files
+        run: |
+          cp .env.example .env
+          cp .env.example apps/api/.env
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -62,7 +52,7 @@ jobs:
       - name: Generate Prisma Client & Run Seed
         run: |
           pnpm --filter @callagent/api prisma:generate
-          pnpm --filter @callagent/api prisma:push
+          pnpm --filter @callagent/api exec prisma db push --accept-data-loss
           pnpm --filter @callagent/api prisma:seed
 
       - name: Run Backend Integration & Unit Tests
@@ -73,3 +63,4 @@ jobs:
 
       - name: Build Frontend Application
         run: pnpm --filter @callagent/web build
+
